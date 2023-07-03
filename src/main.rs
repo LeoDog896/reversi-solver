@@ -24,8 +24,24 @@ use std::time::{Duration, Instant};
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Square {
     Empty,
-    Player,
-    Cpu,
+    Player1,
+    Player2,
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Player {
+    One,
+    Two,
+}
+
+impl Player {
+    const fn opponent(self) -> Self {
+        match self {
+            Player::One => Player::Two,
+            Player::Two => Player::One,
+        }
+    }
 }
 
 /**
@@ -44,7 +60,7 @@ struct Board {
     perimeter: IndexSet<u8>,
     player_available_actions: IndexSet<u8>,
     cpu_available_actions: IndexSet<u8>,
-    player_turn: bool,
+    player_turn: Player,
 }
 
 /**
@@ -53,7 +69,6 @@ struct Board {
 impl Board {
     /**
      * Initializes a Reversi game board
-     *
      */
     fn new(width: u8, height: u8) -> Self {
         let size = width * height;
@@ -62,10 +77,10 @@ impl Board {
         let mut perimeter_tiles: IndexSet<u8> = IndexSet::new();
         let mut new_board = vec![Square::Empty; (size).into()];
 
-        new_board[28] = Square::Player;
-        new_board[35] = Square::Player;
-        new_board[27] = Square::Cpu;
-        new_board[36] = Square::Cpu;
+        new_board[28] = Square::Player1;
+        new_board[35] = Square::Player1;
+        new_board[27] = Square::Player2;
+        new_board[36] = Square::Player2;
 
         player_actions.insert(26);
         player_actions.insert(19);
@@ -97,7 +112,7 @@ impl Board {
             perimeter: perimeter_tiles,
             player_available_actions: player_actions,
             cpu_available_actions: cpu_actions,
-            player_turn: true, // Player always takes the first turn
+            player_turn: Player::One, // Player always takes the first turn
         }
     }
 
@@ -135,7 +150,7 @@ impl Board {
                 // Depending on direction, changes the formula for iteration
                 let new_pos: u8 = match get_new_pos(direction, pos, u, self.board_size) {
                     None => break,
-                    Some(x) => Some(x).unwrap(),
+                    Some(x) => x,
                 };
 
                 let new_pos_usize: usize = new_pos.into();
@@ -166,7 +181,7 @@ impl Board {
         for i in 0..3 {
             let new_pos: u8 = match pos.checked_sub(9 - i) {
                 None => continue,
-                Some(x) => Some(x).unwrap(),
+                Some(x) => x,
             };
             let new_pos_usize: usize = new_pos.into();
             if self.board.get(new_pos_usize).unwrap() == &Square::Empty {
@@ -182,15 +197,12 @@ impl Board {
         }
 
         // Update perimeter to the right
-        match pos + 1 < self.board_size {
-            true => {
-                let new_pos = pos + 1;
-                let new_pos_usize: usize = new_pos.into();
-                if self.board.get(new_pos_usize).unwrap() == &Square::Empty {
-                    self.perimeter.insert(new_pos);
-                }
+        if pos + 1 < self.board_size {
+            let new_pos = pos + 1;
+            let new_pos_usize: usize = new_pos.into();
+            if self.board.get(new_pos_usize).unwrap() == &Square::Empty {
+                self.perimeter.insert(new_pos);
             }
-            false => (),
         }
 
         // Update perimeter below
@@ -208,7 +220,7 @@ impl Board {
         self.cpu_available_actions.remove(&pos);
 
         // For each player Player and CPU
-        for player in &[Square::Player, Square::Cpu] {
+        for player in &[Square::Player1, Square::Player2] {
             // For each tile in the perimeter
             for tile in self.get_perimeter() {
                 // Check if that tile is an available action
@@ -217,11 +229,7 @@ impl Board {
         }
 
         // Alternate turns
-        if self.player_turn {
-            self.player_turn = false;
-        } else {
-            self.player_turn = true;
-        }
+        self.player_turn = self.player_turn.opponent();
     }
 
     /**
@@ -240,7 +248,7 @@ impl Board {
                 // Depending on direction, changes the formula for iteration
                 let new_pos: u8 = match get_new_pos(direction, pos, u, self.board_size) {
                     None => break,
-                    Some(x) => Some(x).unwrap(),
+                    Some(x) => x,
                 };
 
                 let new_pos_usize: usize = new_pos.into();
@@ -251,7 +259,7 @@ impl Board {
                     tiles.push(new_pos);
                 } else if tile == &val && !tiles.is_empty() {
                     // If there is a tile the same color as the initial val with opposing tiles inbetween...
-                    if val == Square::Player {
+                    if val == Square::Player1 {
                         self.player_available_actions.insert(pos);
                     } else {
                         self.cpu_available_actions.insert(pos);
@@ -260,7 +268,7 @@ impl Board {
                     return;
                 } else {
                     // Else, blank tile means not available action
-                    if val == Square::Player {
+                    if val == Square::Player1 {
                         self.player_available_actions.remove(&pos);
                     } else {
                         self.cpu_available_actions.remove(&pos);
@@ -281,23 +289,18 @@ impl Board {
      * reference the player or cpu sets
      */
     fn get_available_actions(&self) -> IndexSet<u8> {
-        if self.player_turn {
-            self.get_player_actions()
-        } else {
-            self.get_cpu_actions()
+        match self.player_turn {
+            Player::One => self.get_player_actions(),
+            Player::Two => self.get_cpu_actions(),
         }
     }
 
     fn get_player_actions(&self) -> IndexSet<u8> {
-        IndexSet::clone(&self.player_available_actions)
+        self.player_available_actions.clone()
     }
 
     fn get_cpu_actions(&self) -> IndexSet<u8> {
-        IndexSet::clone(&self.cpu_available_actions)
-    }
-
-    const fn is_player_turn(&self) -> bool {
-        self.player_turn
+        self.cpu_available_actions.clone()
     }
 
     /**
@@ -340,8 +343,8 @@ impl Board {
         for i in 0..64 {
             match self.board.get(i).unwrap() {
                 Square::Empty => continue,
-                Square::Player => count_player += 1,
-                Square::Cpu => count_cpu += 1,
+                Square::Player1 => count_player += 1,
+                Square::Player2 => count_cpu += 1,
             }
         }
 
@@ -357,7 +360,7 @@ impl Board {
      */
     fn add(&mut self, pos: u8, val: Square) {
         let pos_u: usize = pos.into();
-        self.board.splice(pos_u..(pos_u + 1), iter::once(val));
+        self.board.splice(pos_u..=pos_u, iter::once(val));
     }
 }
 
@@ -377,9 +380,9 @@ impl Display for Board {
                     write!(f, "     ")?;
                 }
             }
-            if i == &Square::Player {
+            if i == &Square::Player1 {
                 write!(f, "{} ", "●".red())?;
-            } else if i == &Square::Cpu {
+            } else if i == &Square::Player2 {
                 write!(f, "{} ", "●".green())?;
             } else if self.player_available_actions.contains(&count) {
                 write!(f, "{} ", "*".bold())?;
@@ -421,7 +424,7 @@ fn get_new_pos(dir: u8, pos: u8, iter: u8, size: u8) -> Option<u8> {
 
         1 => {
             // Left
-            pos.checked_sub(iter).filter(|&x| Some(x).unwrap() % 8 != 7)
+            pos.checked_sub(iter).filter(|&x| x % 8 != 7)
         }
 
         2 => {
@@ -661,7 +664,7 @@ fn random_playout(b: &mut Board, diff: &String) -> u8 {
         match b.check_game_state() {
             0 => {
                 // Game not done
-                if !b.player_turn {
+                if b.player_turn == Player::Two {
                     let actions = b.get_cpu_actions();
                     let actions_size = actions.len();
 
@@ -670,7 +673,7 @@ fn random_playout(b: &mut Board, diff: &String) -> u8 {
                         "1" => {
                             let rand_index = rand::thread_rng().gen_range(0..actions_size);
                             let rand_val = actions.get_index(rand_index).unwrap();
-                            b.ins(*rand_val, Square::Cpu);
+                            b.ins(*rand_val, Square::Player2);
                         }
 
                         // HARD
@@ -679,7 +682,7 @@ fn random_playout(b: &mut Board, diff: &String) -> u8 {
                             if new_val == 99 {
                                 continue;
                             } // Someone ran out of moves
-                            b.ins(new_val, Square::Cpu);
+                            b.ins(new_val, Square::Player2);
                         }
                         _ => println!(
                             "ERROR in random_playout() -> diff variable invalid: {}",
@@ -691,7 +694,7 @@ fn random_playout(b: &mut Board, diff: &String) -> u8 {
                     let actions_size = actions.len();
                     let rand_index = rand::thread_rng().gen_range(0..actions_size);
                     let rand_val = actions.get_index(rand_index).unwrap();
-                    b.ins(*rand_val, Square::Player);
+                    b.ins(*rand_val, Square::Player1);
                 }
 
                 continue;
@@ -723,7 +726,7 @@ fn get_max_tile(b: &Board) -> u8 {
         // check increase in value of tiles
         let mut new_board: Board = b.clone();
 
-        new_board.ins(action, Square::Cpu);
+        new_board.ins(action, Square::Player2);
 
         let (_, cpu_score): (u8, u8) = new_board.get_score();
 
@@ -795,7 +798,7 @@ fn main() {
 
         println!("{board}");
 
-        if board.is_player_turn() {
+        if board.player_turn == Player::One {
             println!("Place piece at position: ");
             let mut input = String::new();
             io::stdin()
@@ -805,7 +808,7 @@ fn main() {
             // Validate input string
             if re.is_match(&input) {
                 let input_u8: u8 = convert_2d(&input);
-                board.ins(input_u8, Square::Player);
+                board.ins(input_u8, Square::Player1);
             } else {
                 match input.as_str() {
                     "help\n" => {
@@ -830,7 +833,7 @@ fn main() {
         } else {
             let best_play: u8 = monte_carlo_tree_search(&board, MAX_STEPS, TIME, &difficulty);
             println!("\n\nCPU found {} as best play", convert_num(best_play));
-            board.ins(best_play, Square::Cpu);
+            board.ins(best_play, Square::Player2);
         }
     }
 }
