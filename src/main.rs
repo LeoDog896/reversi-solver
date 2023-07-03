@@ -1,3 +1,4 @@
+use owo_colors::OwoColorize;
 use rand::Rng;
 use regex::Regex;
 use std::cmp::Ordering;
@@ -9,6 +10,7 @@ use std::io::Write;
 
 // HashMap is used in order to assign a count to each element inside win/draw/loss stats
 use std::collections::HashMap;
+use std::iter;
 
 // IndexSet provides an indexed HashSet to allow returning element by index
 // Used for getting random items from set in O(1) time so MCTS is more efficient
@@ -18,16 +20,12 @@ use indexmap::IndexSet;
 // Used to limit MCTS duration
 use std::time::{Duration, Instant};
 
-// Pretty board styling
-use ansi_term::Color::{Green, Red};
-use ansi_term::Style;
-
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Square {
     Empty,
     Player,
-    CPU,
+    Cpu,
 }
 
 /**
@@ -57,8 +55,8 @@ impl Board {
      * Initializes a Reversi game board
      *
      */
-    fn new(w: u8, h: u8) -> Board {
-        let size = w * h;
+    fn new(width: u8, height: u8) -> Self {
+        let size = width * height;
         let mut player_actions: IndexSet<u8> = IndexSet::new();
         let mut cpu_actions: IndexSet<u8> = IndexSet::new();
         let mut perimeter_tiles: IndexSet<u8> = IndexSet::new();
@@ -66,8 +64,8 @@ impl Board {
 
         new_board[28] = Square::Player;
         new_board[35] = Square::Player;
-        new_board[27] = Square::CPU;
-        new_board[36] = Square::CPU;
+        new_board[27] = Square::Cpu;
+        new_board[36] = Square::Cpu;
 
         player_actions.insert(26);
         player_actions.insert(19);
@@ -92,10 +90,10 @@ impl Board {
         perimeter_tiles.insert(44);
         perimeter_tiles.insert(45);
 
-        Board {
-            width: w,
+        Self {
+            width,
             board_size: size,
-            board: new_board, //must convert u8 type -> usize type
+            board: new_board,
             perimeter: perimeter_tiles,
             player_available_actions: player_actions,
             cpu_available_actions: cpu_actions,
@@ -110,15 +108,14 @@ impl Board {
      */
     fn ins(&mut self, pos: u8, val: Square) {
         // Add new tile to board
-        let pos_u: usize = match self.get_available_actions().contains(&pos) {
-            false => {
-                println!("ERROR: {} is not a valid action", pos);
-                return;
-            }
-            true => pos.into(),
+        let pos_u: usize = if self.get_available_actions().contains(&pos) {
+            pos.into()
+        } else {
+            println!("ERROR: {} is not a valid action", pos);
+            return;
         };
 
-        self.board.splice(pos_u..pos_u + 1, [val].iter().cloned());
+        self.board.splice(pos_u..=pos_u, iter::once(val));
 
         let mut tiles = Vec::new();
 
@@ -178,17 +175,11 @@ impl Board {
             }
         }
 
-        // Update perimeter to the left
-        match pos.checked_sub(1) {
-            Some(x) => {
-                let new_pos = Some(x).unwrap();
-                let new_pos_usize: usize = Some(x).unwrap().into();
-                if self.board.get(new_pos_usize).unwrap() == &Square::Empty {
-                    self.perimeter.insert(new_pos);
-                }
+        if let Some(x) = pos.checked_sub(1) {
+            if self.board.get::<usize>(x.into()).unwrap() == &Square::Empty {
+                self.perimeter.insert(x);
             }
-            None => (),
-        };
+        }
 
         // Update perimeter to the right
         match pos + 1 < self.board_size {
@@ -217,7 +208,7 @@ impl Board {
         self.cpu_available_actions.remove(&pos);
 
         // For each player Player and CPU
-        for player in &[Square::Player, Square::CPU] {
+        for player in &[Square::Player, Square::Cpu] {
             // For each tile in the perimeter
             for tile in self.get_perimeter() {
                 // Check if that tile is an available action
@@ -305,7 +296,7 @@ impl Board {
         IndexSet::clone(&self.cpu_available_actions)
     }
 
-    fn is_player_turn(&self) -> bool {
+    const fn is_player_turn(&self) -> bool {
         self.player_turn
     }
 
@@ -350,7 +341,7 @@ impl Board {
             match self.board.get(i).unwrap() {
                 Square::Empty => continue,
                 Square::Player => count_player += 1,
-                Square::CPU => count_cpu += 1,
+                Square::Cpu => count_cpu += 1,
             }
         }
 
@@ -366,7 +357,7 @@ impl Board {
      */
     fn add(&mut self, pos: u8, val: Square) {
         let pos_u: usize = pos.into();
-        self.board.splice(pos_u..(pos_u + 1), [val].iter().cloned());
+        self.board.splice(pos_u..(pos_u + 1), iter::once(val));
     }
 }
 
@@ -374,43 +365,35 @@ impl Display for Board {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let (player_score, cpu_score): (u8, u8) = self.get_score();
 
-        writeln!(
-            f,
-            "\n     {}",
-            Style::default().bold().paint("A B C D E F G H")
-        )?;
+        writeln!(f, "\n     {}", "A B C D E F G H".bold())?;
 
         for (count, i) in self.board.iter().enumerate() {
             let count = count as u8;
             if count % self.width == 0 {
                 if count != 0 {
                     let row_num: u8 = count / 8;
-                    write!(
-                        f,
-                        "{}\n     ",
-                        Style::default().bold().paint(row_num.to_string())
-                    )?;
+                    write!(f, "{}\n     ", row_num.to_string().bold())?;
                 } else {
                     write!(f, "     ")?;
                 }
             }
             if i == &Square::Player {
-                write!(f, "{} ", Red.paint("●"))?;
-            } else if i == &Square::CPU {
-                write!(f, "{} ", Green.paint("●"))?;
+                write!(f, "{} ", "●".red())?;
+            } else if i == &Square::Cpu {
+                write!(f, "{} ", "●".green())?;
             } else if self.player_available_actions.contains(&count) {
-                write!(f, "{} ", Style::default().bold().paint("*"))?;
+                write!(f, "{} ", "*".bold())?;
             } else {
                 write!(f, "- ")?;
             }
         }
-        write!(f, "{}\n\n", Style::default().bold().paint("8"))?;
+        write!(f, "{}\n\n", "8".bold())?;
 
         writeln!(
             f,
             "     Player: {}, CPU: {}\n",
-            Red.paint(player_score.to_string()),
-            Green.paint(cpu_score.to_string())
+            player_score.to_string().red(),
+            cpu_score.to_string().green()
         )?;
 
         Ok(())
@@ -498,7 +481,7 @@ fn get_new_pos(dir: u8, pos: u8, iter: u8, size: u8) -> Option<u8> {
  * @returns:    u8 position in 1d Vec
  */
 fn convert_2d(s: &str) -> u8 {
-    //Handle panic
+    // Handle panic
     let letter = s.chars().next().unwrap().to_ascii_lowercase();
     let num = s.chars().nth(1).unwrap();
 
@@ -532,7 +515,7 @@ fn convert_2d(s: &str) -> u8 {
 
 /**
  * Convert integer vector index into 2d string index
- * Note: this function is the inverse of convert_2d()
+ * Note: this function is the inverse of `convert_2d`()
  * @params:     num: less than 64 valued integer representing 1d index of vector
  * @returns:    String of values [a-h][1-8]
  */
@@ -562,9 +545,7 @@ fn print_title() {
     println!("#                                                              #");
     println!(
         "#                {}                #",
-        Style::default()
-            .bold()
-            .paint("Welcome to Reversi against AI!")
+        "Welcome to Reversi against AI!".bold()
     );
     println!("#                                                              #");
     println!("################################################################\n\n");
@@ -574,23 +555,17 @@ fn print_help() {
     println!("\nCommands:\n");
     println!(
         "  {}  -  print the current available actions",
-        Style::default().bold().paint("actions")
+        "actions".bold()
     );
-    println!(
-        "  {}  -  show game rules",
-        Style::default().bold().paint("rules")
-    );
-    println!(
-        "  {}     -  quit the game",
-        Style::default().bold().paint("exit")
-    );
+    println!("  {}  -  show game rules", "rules".bold());
+    println!("  {}     -  quit the game", "exit".bold());
     println!();
 }
 
 fn print_actions(actions: IndexSet<u8>) {
     print!("\nPlayer's Actions: ");
     for action in actions {
-        print!("{} ", Style::default().bold().paint(convert_num(action)));
+        print!("{} ", convert_num(action).bold());
     }
     println!("\n");
 }
@@ -598,12 +573,12 @@ fn print_actions(actions: IndexSet<u8>) {
 fn print_rules() {
     println!(
         "      #                {}                #\n",
-        Style::default().bold().paint("REVERSI RULES")
+        "REVERSI RULES".bold()
     );
     println!(
         " * {} tiles represent the user's spots, {} represent the CPUs.\n",
-        Red.paint("Red"),
-        Green.paint("Green")
+        "Red".red(),
+        "Green".green()
     );
     println!(" * The user starts by placing a tile adjacent to a green tile.\n Possible actions are marked by asterisks (*) on the board.\n");
     println!(" * The game ends when either player cannot play a piece or the\n board is full.  The player with the most tiles wins.\n");
@@ -613,17 +588,12 @@ fn print_rules() {
  * Simplified Monte Carlo Tree Search which performs random playouts until completion
  * and records the win/draw/loss statistics for each available action at current board state.
  *  Parameters:
- *      b              -    the current board state to initialize the playout board
- *      max_steps      -    maximum number of iterations
- *      timer          -    maximum amount of time to spend during the mcts in seconds
+ *      `b`              -    the current board state to initialize the playout board
+ *      `max_steps`      -    maximum number of iterations
+ *      `timer`          -    maximum amount of time to spend during the mcts in seconds
  *
  */
-fn monte_carlo_tree_search(
-    b: &Board,
-    max_steps: usize,
-    timer: usize,
-    diff: &String,
-) -> u8 {
+fn monte_carlo_tree_search(b: &Board, max_steps: usize, timer: usize, diff: &String) -> u8 {
     let mut stats: [Vec<u8>; 3] = [vec![], vec![], vec![]];
     let start_time = Instant::now();
 
@@ -656,7 +626,7 @@ fn monte_carlo_tree_search(
 
     // Populate hashmap with frequency of elements in win list
     let mut a = HashMap::new();
-    for i in stats[0].iter() {
+    for i in &stats[0] {
         if a.contains_key(i) {
             *(a.get_mut(&i).unwrap()) += 1;
         } else {
@@ -700,7 +670,7 @@ fn random_playout(b: &mut Board, diff: &String) -> u8 {
                         "1" => {
                             let rand_index = rand::thread_rng().gen_range(0..actions_size);
                             let rand_val = actions.get_index(rand_index).unwrap();
-                            b.ins(*rand_val, Square::CPU);
+                            b.ins(*rand_val, Square::Cpu);
                         }
 
                         // HARD
@@ -709,7 +679,7 @@ fn random_playout(b: &mut Board, diff: &String) -> u8 {
                             if new_val == 99 {
                                 continue;
                             } // Someone ran out of moves
-                            b.ins(new_val, Square::CPU);
+                            b.ins(new_val, Square::Cpu);
                         }
                         _ => println!(
                             "ERROR in random_playout() -> diff variable invalid: {}",
@@ -753,7 +723,7 @@ fn get_max_tile(b: &Board) -> u8 {
         // check increase in value of tiles
         let mut new_board: Board = b.clone();
 
-        new_board.ins(action, Square::CPU);
+        new_board.ins(action, Square::Cpu);
 
         let (_, cpu_score): (u8, u8) = new_board.get_score();
 
@@ -858,10 +828,9 @@ fn main() {
                 };
             };
         } else {
-            let best_play: u8 =
-                monte_carlo_tree_search(&board, MAX_STEPS, TIME, &difficulty);
+            let best_play: u8 = monte_carlo_tree_search(&board, MAX_STEPS, TIME, &difficulty);
             println!("\n\nCPU found {} as best play", convert_num(best_play));
-            board.ins(best_play, Square::CPU);
+            board.ins(best_play, Square::Cpu);
         }
     }
 }
