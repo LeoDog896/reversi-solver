@@ -504,12 +504,12 @@ fn get_new_pos(dir: u8, pos: u8, iter: u8, size: u8) -> Option<u8> {
 
         4 => {
             // Up left: must check that doesn't % 8 = 7 and doesn't overflow
-            pos.checked_sub(iter * 8 + iter).filter(|&x| Some(x).unwrap() % 8 != 7)
+            pos.checked_sub(iter * 8 + iter).filter(|&x| x % 8 != 7)
         }
 
         5 => {
             // Up right: must check that doesn't % 8 = 0 and doesn't overflow
-            pos.checked_sub(iter * 8 - iter).filter(|&x| Some(x).unwrap() % 8 != 0)
+            pos.checked_sub(iter * 8 - iter).filter(|&x| x % 8 != 0)
         }
 
         6 => {
