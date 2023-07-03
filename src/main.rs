@@ -1,6 +1,8 @@
 use rand::Rng;
 use regex::Regex;
 use std::cmp::Ordering;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::io;
 use std::io::stdout;
 use std::io::Write;
@@ -39,7 +41,6 @@ enum Square {
 #[derive(Clone)]
 struct Board {
     width: u8,
-    height: u8,
     board_size: u8,
     board: Vec<Square>,
     perimeter: IndexSet<u8>,
@@ -93,7 +94,6 @@ impl Board {
 
         Board {
             width: w,
-            height: h,
             board_size: size,
             board: new_board, //must convert u8 type -> usize type
             perimeter: perimeter_tiles,
@@ -104,59 +104,13 @@ impl Board {
     }
 
     /**
-     * Print the board vec to the screen
-     *
-     * Players tiles are printed in RED
-     * CPUs tiles are printed in GREEN
-     */
-    fn print(&self) {
-        let (player_score, cpu_score): (u8, u8) = self.get_score();
-
-        println!(
-            "\n     {}",
-            Style::default().bold().paint("A B C D E F G H")
-        );
-
-        for (count, i) in self.board.iter().enumerate() {
-            let count = count as u8;
-            if count % self.width == 0 {
-                if count != 0 {
-                    let row_num: u8 = count / 8;
-                    print!(
-                        "{}\n     ",
-                        Style::default().bold().paint(row_num.to_string())
-                    );
-                } else {
-                    print!("     ")
-                }
-            }
-            if i == &Square::Player {
-                print!("{} ", Red.paint("●"));
-            } else if i == &Square::CPU {
-                print!("{} ", Green.paint("●"));
-            } else if self.player_available_actions.contains(&count) {
-                print!("{} ", Style::default().bold().paint("*"));
-            } else {
-                print!("- ");
-            }
-        }
-        print!("{}\n\n", Style::default().bold().paint("8"));
-
-        println!(
-            "     Player: {}, CPU: {}\n",
-            Red.paint(player_score.to_string()),
-            Green.paint(cpu_score.to_string())
-        );
-    }
-
-    /**
      * Handles a piece being put onto the board
      *
      * Adds to board -> flips pieces -> update perimeter -> updates available actions -> change turns
      */
-    fn ins(&mut self, pos: u8, val: Square, debug: bool) {
+    fn ins(&mut self, pos: u8, val: Square) {
         // Add new tile to board
-        let pos_u: usize = match self.get_available_actions(debug).contains(&pos) {
+        let pos_u: usize = match self.get_available_actions().contains(&pos) {
             false => {
                 println!("ERROR: {} is not a valid action", pos);
                 return;
@@ -233,11 +187,7 @@ impl Board {
                     self.perimeter.insert(new_pos);
                 }
             }
-            None => {
-                if debug {
-                    println!("Overflow, but it's chill, I handled it")
-                }
-            }
+            None => (),
         };
 
         // Update perimeter to the right
@@ -249,24 +199,17 @@ impl Board {
                     self.perimeter.insert(new_pos);
                 }
             }
-            false => {
-                if debug {
-                    println!("Overflow, but it's chill, I handled it")
-                }
-            }
+            false => (),
         }
 
         // Update perimeter below
         for i in 0..3 {
             let new_pos: u8 = pos + 9 - i;
             let new_pos_usize: usize = new_pos.into();
-            if new_pos < self.board_size && self.board.get(new_pos_usize).unwrap() == &Square::Empty {
+            if new_pos < self.board_size && self.board.get(new_pos_usize).unwrap() == &Square::Empty
+            {
                 self.perimeter.insert(new_pos);
             }
-        }
-
-        if debug {
-            println!("{:?}", self.perimeter);
         }
 
         // Update available actions
@@ -278,29 +221,15 @@ impl Board {
             // For each tile in the perimeter
             for tile in self.get_perimeter() {
                 // Check if that tile is an available action
-                self.check_tile_actions(tile, *player, debug);
+                self.check_tile_actions(tile, *player);
             }
         }
 
         // Alternate turns
         if self.player_turn {
-            if debug {
-                println!("Player's turn");
-            }
             self.player_turn = false;
         } else {
-            if debug {
-                println!("CPU's turn");
-            }
             self.player_turn = true;
-        }
-
-        if debug {
-            println!(
-                "Player's Available Actions: {:?}",
-                self.get_player_actions()
-            );
-            println!("CPU's Available Actions: {:?}", self.get_cpu_actions());
         }
     }
 
@@ -308,7 +237,7 @@ impl Board {
      * Given a tile position it will check in all directions if it is an available option
      * for player with the input val (1 or 2)
      */
-    fn check_tile_actions(&mut self, pos: u8, val: Square, debug: bool) {
+    fn check_tile_actions(&mut self, pos: u8, val: Square) {
         let mut tiles = Vec::new();
 
         // Manages the direction of iteration
@@ -331,9 +260,6 @@ impl Board {
                     tiles.push(new_pos);
                 } else if tile == &val && !tiles.is_empty() {
                     // If there is a tile the same color as the initial val with opposing tiles inbetween...
-                    if debug {
-                        println!("Added {} to actions for {:?}", new_pos, val);
-                    }
                     if val == Square::Player {
                         self.player_available_actions.insert(pos);
                     } else {
@@ -343,9 +269,6 @@ impl Board {
                     return;
                 } else {
                     // Else, blank tile means not available action
-                    if debug {
-                        println!("Removed {} from actions for player {:?}", pos, val);
-                    }
                     if val == Square::Player {
                         self.player_available_actions.remove(&pos);
                     } else {
@@ -366,19 +289,11 @@ impl Board {
      * Should only use this function to get the available actions, don't individually
      * reference the player or cpu sets
      */
-    fn get_available_actions(&self, debug: bool) -> IndexSet<u8> {
+    fn get_available_actions(&self) -> IndexSet<u8> {
         if self.player_turn {
-            let actions = self.get_player_actions();
-            if debug {
-                println!("Player Available Actions: {:?}", actions);
-            }
-            actions
+            self.get_player_actions()
         } else {
-            let actions = self.get_cpu_actions();
-            if debug {
-                println!("CPU Available Actions: {:?}", actions);
-            }
-            actions
+            self.get_cpu_actions()
         }
     }
 
@@ -406,21 +321,13 @@ impl Board {
     // 1 -> player win
     // 2 -> cpu win
     // 3 -> draw
-    fn check_game_state(&self, debug: bool) -> u8 {
+    fn check_game_state(&self) -> u8 {
         let player_actions = self.get_player_actions();
         let cpu_actions = self.get_cpu_actions();
 
         // GAME IS ENDED
         if cpu_actions.is_empty() || player_actions.is_empty() {
             let (player_score, cpu_score): (u8, u8) = self.get_score();
-
-            if debug {
-                println!(
-                    "  Player: {}, CPU: {}",
-                    Red.paint(player_score.to_string()),
-                    Green.paint(cpu_score.to_string())
-                );
-            }
 
             match player_score.cmp(&cpu_score) {
                 Ordering::Greater => 1,
@@ -460,6 +367,53 @@ impl Board {
     fn add(&mut self, pos: u8, val: Square) {
         let pos_u: usize = pos.into();
         self.board.splice(pos_u..(pos_u + 1), [val].iter().cloned());
+    }
+}
+
+impl Display for Board {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let (player_score, cpu_score): (u8, u8) = self.get_score();
+
+        writeln!(
+            f,
+            "\n     {}",
+            Style::default().bold().paint("A B C D E F G H")
+        )?;
+
+        for (count, i) in self.board.iter().enumerate() {
+            let count = count as u8;
+            if count % self.width == 0 {
+                if count != 0 {
+                    let row_num: u8 = count / 8;
+                    write!(
+                        f,
+                        "{}\n     ",
+                        Style::default().bold().paint(row_num.to_string())
+                    )?;
+                } else {
+                    write!(f, "     ")?;
+                }
+            }
+            if i == &Square::Player {
+                write!(f, "{} ", Red.paint("●"))?;
+            } else if i == &Square::CPU {
+                write!(f, "{} ", Green.paint("●"))?;
+            } else if self.player_available_actions.contains(&count) {
+                write!(f, "{} ", Style::default().bold().paint("*"))?;
+            } else {
+                write!(f, "- ")?;
+            }
+        }
+        write!(f, "{}\n\n", Style::default().bold().paint("8"))?;
+
+        writeln!(
+            f,
+            "     Player: {}, CPU: {}\n",
+            Red.paint(player_score.to_string()),
+            Green.paint(cpu_score.to_string())
+        )?;
+
+        Ok(())
     }
 }
 
@@ -627,10 +581,6 @@ fn print_help() {
         Style::default().bold().paint("rules")
     );
     println!(
-        "  {}    -  toggles showing debug information",
-        Style::default().bold().paint("debug")
-    );
-    println!(
         "  {}     -  quit the game",
         Style::default().bold().paint("exit")
     );
@@ -659,16 +609,6 @@ fn print_rules() {
     println!(" * The game ends when either player cannot play a piece or the\n board is full.  The player with the most tiles wins.\n");
 }
 
-fn toggle_debug(debug: bool) -> bool {
-    if debug {
-        println!("Debug turned OFF");
-        false
-    } else {
-        println!("Debug turned ON");
-        true
-    }
-}
-
 /**
  * Simplified Monte Carlo Tree Search which performs random playouts until completion
  * and records the win/draw/loss statistics for each available action at current board state.
@@ -676,7 +616,6 @@ fn toggle_debug(debug: bool) -> bool {
  *      b              -    the current board state to initialize the playout board
  *      max_steps      -    maximum number of iterations
  *      timer          -    maximum amount of time to spend during the mcts in seconds
- *      debug          -    used to print extra debug statements
  *
  */
 fn monte_carlo_tree_search(
@@ -684,43 +623,29 @@ fn monte_carlo_tree_search(
     max_steps: usize,
     timer: usize,
     diff: &String,
-    debug: bool,
 ) -> u8 {
     let mut stats: [Vec<u8>; 3] = [vec![], vec![], vec![]];
     let start_time = Instant::now();
 
-    if debug {
-        println!("CPU performing {} random playouts...", max_steps);
-    }
-
     for i in 0..max_steps {
-        if !debug {
-            print!(".");
-            stdout().flush().unwrap();
-        }
+        print!(".");
+        stdout().flush().unwrap();
+
         if (i + 1) % 30 == 0 {
             println!();
         }
 
         // Break out of function when timer is reached
         if start_time.elapsed() >= Duration::new(timer as u64, 0) {
-            let res: u64 = i as u64 / start_time.elapsed().as_secs();
-            if debug {
-                println!("Play-outs per second: {}", res);
-            }
             break;
         }
 
-        let actions = b.get_available_actions(debug);
-
-        if debug {
-            println!("Step #{} | {:?}", i, actions);
-        }
+        let actions = b.get_available_actions();
 
         for action in actions {
             let mut playout_board: Board = b.clone();
 
-            match random_playout(&mut playout_board, action, diff, debug) {
+            match random_playout(&mut playout_board, diff) {
                 1 => stats[1].push(action), // 1 -> Player wins so add action to loss list
                 2 => stats[0].push(action), // 2 -> CPU wins so add action to win list
                 3 => stats[2].push(action), // 3 -> Game draw so add action to draw list
@@ -739,19 +664,10 @@ fn monte_carlo_tree_search(
         }
     }
 
-    if debug {
-        println!("Player wins: {:?}", stats[1]);
-        println!("CPU wins: {:?}", stats[0]);
-        println!("Draws: {:?}", stats[2]);
-        for (pos, wins) in &a {
-            println!("{}: {}", pos, wins);
-        }
-    }
-
     // Returns the highest value in frequency hashmap as best play if win list exists,
     // else return a random action if no elements exist in win list.
     if stats[0].is_empty() {
-        let actions = b.get_available_actions(debug);
+        let actions = b.get_available_actions();
         let actions_size = actions.len();
         let rand_index = rand::thread_rng().gen_range(0..actions_size);
         let rand_val = actions.get_index(rand_index).unwrap();
@@ -769,14 +685,10 @@ fn monte_carlo_tree_search(
         - if diff is set to easy, then the playouts will be random actions
         - if diff is set to hard, playouts will use the Max Tile Heuristic
 */
-fn random_playout(b: &mut Board, action: u8, diff: &String, debug: bool) -> u8 {
-    if debug {
-        println!("Playing action: {}", action);
-    }
-
+fn random_playout(b: &mut Board, diff: &String) -> u8 {
     // Play a game until completion
     loop {
-        match b.check_game_state(debug) {
+        match b.check_game_state() {
             0 => {
                 // Game not done
                 if !b.player_turn {
@@ -788,19 +700,16 @@ fn random_playout(b: &mut Board, action: u8, diff: &String, debug: bool) -> u8 {
                         "1" => {
                             let rand_index = rand::thread_rng().gen_range(0..actions_size);
                             let rand_val = actions.get_index(rand_index).unwrap();
-                            b.ins(*rand_val, Square::CPU, debug);
+                            b.ins(*rand_val, Square::CPU);
                         }
 
                         // HARD
                         "2" => {
-                            let new_val = get_max_tile(b, debug);
+                            let new_val = get_max_tile(b);
                             if new_val == 99 {
                                 continue;
                             } // Someone ran out of moves
-                            if debug {
-                                println!("new_val: {}", new_val);
-                            }
-                            b.ins(new_val, Square::CPU, debug);
+                            b.ins(new_val, Square::CPU);
                         }
                         _ => println!(
                             "ERROR in random_playout() -> diff variable invalid: {}",
@@ -812,12 +721,9 @@ fn random_playout(b: &mut Board, action: u8, diff: &String, debug: bool) -> u8 {
                     let actions_size = actions.len();
                     let rand_index = rand::thread_rng().gen_range(0..actions_size);
                     let rand_val = actions.get_index(rand_index).unwrap();
-                    b.ins(*rand_val, Square::Player, debug);
+                    b.ins(*rand_val, Square::Player);
                 }
 
-                if debug {
-                    b.print();
-                }
                 continue;
             }
             1 => return 1, // Player Wins
@@ -833,15 +739,11 @@ fn random_playout(b: &mut Board, action: u8, diff: &String, debug: bool) -> u8 {
  *      - Returns the position that results in the highest score out of all possible actions
  *      - If no actions are available, then return an error code of 99 to indicate game end                      
  */
-fn get_max_tile(b: &Board, debug: bool) -> u8 {
-    let actions = b.get_available_actions(debug);
+fn get_max_tile(b: &Board) -> u8 {
+    let actions = b.get_available_actions();
     let (_, prev_cpu_score): (u8, u8) = b.get_score();
     let best_score = prev_cpu_score;
     let mut best_pos: u8 = 0;
-
-    if debug {
-        println!("{:?}", actions);
-    }
 
     if actions.is_empty() {
         return 99;
@@ -851,7 +753,7 @@ fn get_max_tile(b: &Board, debug: bool) -> u8 {
         // check increase in value of tiles
         let mut new_board: Board = b.clone();
 
-        new_board.ins(action, Square::CPU, debug);
+        new_board.ins(action, Square::CPU);
 
         let (_, cpu_score): (u8, u8) = new_board.get_score();
 
@@ -897,32 +799,31 @@ fn main() {
 
     let mut board = Board::new(WIDTH, HEIGHT);
     let re = Regex::new(r"([aA-hH][1-8])").unwrap();
-    let mut debug = false;
 
     // =============
     // Player VS CPU
     // =============
     loop {
-        match board.check_game_state(debug) {
+        match board.check_game_state() {
             1 => {
                 println!("Player has won");
-                board.print();
+                println!("{board}");
                 break;
             }
             2 => {
                 println!("CPU has won");
-                board.print();
+                println!("{board}");
                 break;
             }
             3 => {
                 println!("Game is a draw");
-                board.print();
+                println!("{board}");
                 break;
             }
             _ => (),
         };
 
-        board.print();
+        println!("{board}");
 
         if board.is_player_turn() {
             println!("Place piece at position: ");
@@ -934,7 +835,7 @@ fn main() {
             // Validate input string
             if re.is_match(&input) {
                 let input_u8: u8 = convert_2d(&input);
-                board.ins(input_u8, Square::Player, debug);
+                board.ins(input_u8, Square::Player);
             } else {
                 match input.as_str() {
                     "help\n" => {
@@ -949,10 +850,6 @@ fn main() {
                         print_rules();
                         continue;
                     }
-                    "debug\n" => {
-                        debug = toggle_debug(debug);
-                        continue;
-                    }
                     "exit\n" => break,
                     _ => {
                         println!("ERROR: invalid input, enter 'help' for command information");
@@ -962,9 +859,9 @@ fn main() {
             };
         } else {
             let best_play: u8 =
-                monte_carlo_tree_search(&board, MAX_STEPS, TIME, &difficulty, debug);
+                monte_carlo_tree_search(&board, MAX_STEPS, TIME, &difficulty);
             println!("\n\nCPU found {} as best play", convert_num(best_play));
-            board.ins(best_play, Square::CPU, debug);
+            board.ins(best_play, Square::CPU);
         }
     }
 }
