@@ -129,11 +129,10 @@ impl Game {
         Ok(())
     }
     
-    pub fn from_string(string: &str, validate: bool) -> Result<Game> {
+    pub fn from_string(string: &str, player: Player, validate: bool) -> Result<Self> {
         let mut game = Self::new();
 
         let mut recorded_possible_moves: Vec<usize> = Vec::new();
-        let mut total_cells = 0;
 
         let rows = string.split('\n');
 
@@ -154,29 +153,24 @@ impl Game {
                         recorded_possible_moves.push(at_pos(x, y));
                         continue;
                     }
-                    _ => continue,
+                    '-' => Cell::Empty,
+                    _ => Err(anyhow!("Invalid character: {}", character))?,
                 };
-
-                total_cells += 1;
 
                 game.board.set_cell(x, y, cell);
             }
         }
 
-        game.current_player = if total_cells % 2 == 0 {
-            Player::One
-        } else {
-            Player::Two
-        };
+        game.current_player = player;
 
         if validate {
             let mut moves = game.moves();
 
             moves.sort_unstable();
             recorded_possible_moves.sort_unstable();
-            
+
             if moves != recorded_possible_moves {
-                Err(anyhow!("Possible moves do not match"))?;
+                Err(anyhow!("real != recorded moves: \n{:?} != {:?}\nparsed game:\n{game}", moves, recorded_possible_moves))?;
             }
         }
 

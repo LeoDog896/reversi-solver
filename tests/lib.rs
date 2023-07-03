@@ -2,7 +2,7 @@
 mod tests {
     use std::path::PathBuf;
 
-    use reversi_solver::Game;
+    use reversi_solver::{Game, board::Player};
 
     #[test]
     fn test_games() {
@@ -17,13 +17,22 @@ mod tests {
         for game in games {
             assert!(game.len() == 9);
 
-            let should_fail = match game[0] {
+            let header = game[0].split(" ").collect::<Vec<_>>();
+            assert!(header.len() == 2);
+
+            let should_fail = match header[0] {
                 "nofail" => false,
                 "fail" => true,
-                _ => panic!("Invalid test case {}", game[0]),
+                _ => panic!("Invalid test case {}", header[0]),
+            };
+
+            let player = match header[1] {
+                "X" => Player::One,
+                "O" => Player::Two,
+                _ => panic!("Invalid player {}", header[1]),
             };
             
-            let parsed_game = Game::from_string(&game[1..].join("\n"), true);
+            let parsed_game = Game::from_string(&game[1..].join("\n"), player, true);
 
             if should_fail {
                 assert!(parsed_game.is_err(), "Game should have failed to parse: {game:?}");
