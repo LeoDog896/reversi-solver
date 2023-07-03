@@ -1,57 +1,170 @@
+pub mod board;
+
 use std::fmt;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Cell {
-    Empty,
-    Player1,
-    Player2,
-}
-
-const WIDTH: usize = 8;
-const HEIGHT: usize = 8;
-const SIZE: usize = WIDTH * HEIGHT;
-
-impl Cell {
-    fn to_char(&self) -> char {
-        match self {
-            Cell::Empty => ' ',
-            Cell::Player1 => 'X',
-            Cell::Player2 => 'O',
-        }
-    }
-}
+use board::{Board, Cell, Player, at_pos, HEIGHT, WIDTH};
+use anyhow::{Result, anyhow};
 
 /*
-    Represents the internal state of the game board.
+    A game struct representing the current Reversi game state.
 */
-pub struct Board {
-    cells: [Cell; SIZE],
+#[derive(Clone, Debug, PartialEq)]
+pub struct Game {
+    board: board::Board,
+    current_player: Player,
 }
 
-impl Board {
-    pub fn new() -> Board {
-        Board {
-            cells: [Cell::Empty; SIZE],
+enum Direction {
+    Positive,
+    Negative,
+    None,
+}
+
+impl Direction {
+    fn apply(&self, i: usize, amount: isize) -> usize {
+        match self {
+            Direction::Positive => i.checked_add_signed(amount).unwrap(),
+            Direction::Negative => i.checked_add_signed(amount).unwrap(),
+            Direction::None => i,
+        }
+    }
+}
+
+impl Game {
+    // TODO: this will be horrendously inefficient, however, i want to get test cases in place first,
+    // so i'm doing rudimentary solutions for me to work out later
+    fn moves(&self) -> Vec<usize> {
+        let mut moves = Vec::new();
+
+        // loop through all cells and check if they are valid moves
+        for x in 0..WIDTH {
+            for y in 0..HEIGHT {
+                if self.is_valid_move(x, y) {
+                    moves.push(at_pos(x, y));
+                }
+            }
+        }
+
+        moves
+    }
+    fn is_valid_move(&self, x_init: usize, y_init: usize) -> bool {
+        let cell = self.board.get_cell(x_init, y_init);
+
+        if cell != Cell::Empty {
+            return false;
+        }
+
+        let opposing_tile = Cell::Player(self.current_player.opponent());
+
+        let mut tiles_to_flip: Vec<usize> = Vec::new();
+
+        let directions: &[(Direction, Direction)] = &[
+            (Direction::None, Direction::Positive),
+            (Direction::Positive, Direction::Positive),
+            (Direction::Positive, Direction::None),
+            (Direction::Positive, Direction::Negative),
+            (Direction::None, Direction::Negative),
+            (Direction::Negative, Direction::Negative),
+            (Direction::Negative, Direction::None),
+            (Direction::Negative, Direction::Positive),
+        ];
+
+        for (x_dir, y_dir) in directions {
+            let mut x = x_init;
+            let mut y = y_init;
+
+            x = x_dir.apply(x, 1);
+            y = y_dir.apply(y, 1);
+
+            if !self.board.on_board(x, y) || self.board.get_cell(x, y) != opposing_tile {
+                continue;
+            }
+
+            x = x_dir.apply(x, 1);
+            y = y_dir.apply(y, 1);
+
+            if !self.board.on_board(x, y) {
+                continue;
+            }
+
+            while self.board.get_cell(x, y) == opposing_tile {
+                x = x_dir.apply(x, 1);
+                y = y_dir.apply(y, 1);
+
+                if !self.board.on_board(x, y) {
+                    break;
+                }
+            }
+
+            if !self.board.on_board(x, y) {
+                continue;
+            }
+
+            if self.board.get_cell(x, y) == Cell::Player(self.current_player) {
+                loop {
+                    x = x_dir.apply(x, -1);
+                    y = y_dir.apply(y, -1);
+
+                    if x == x_init && y == y_init {
+                        break;
+                    }
+
+                    tiles_to_flip.push(at_pos(x, y));
+                }
+            }
+        }
+        
+        tiles_to_flip.len() > 0
+    }
+
+    pub fn new() -> Game {
+        let mut board = Board::new();
+
+        board.set_cell(3, 3, Cell::Player(Player::One));
+        board.set_cell(4, 4, Cell::Player(Player::One));
+
+        board.set_cell(3, 4, Cell::Player(Player::Two));
+        board.set_cell(4, 3, Cell::Player(Player::Two));
+
+        Game {
+            board,
+            current_player: Player::One,
         }
     }
 
-    pub fn get_cell(&self, x: usize, y: usize) -> Cell {
-        self.cells[y * WIDTH + x]
-    }
+    pub fn play(&mut self, x: usize, y: usize) -> Result<()> {
+        let moves = self.moves();
 
-    pub fn set_cell(&mut self, x: usize, y: usize, cell: Cell) {
-        self.cells[y * WIDTH + x] = cell;
+        if !moves.contains(&at_pos(x, y)) {
+            return Err(anyhow!("Invalid move"));
+        }
+
+        self.board.set_cell(x, y, Cell::Player(self.current_player));
+
+        self.current_player = self.current_player.opponent();
+        Ok(())
     }
 }
 
-impl fmt::Display for Board {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for Game {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Current player: {}", Cell::Player(self.current_player).to_char())?;
+
+        let moves = self.moves();
+
         for y in 0..HEIGHT {
             for x in 0..WIDTH {
-                write!(f, "{}", self.get_cell(x, y).to_char())?;
+                let character = if moves.contains(&at_pos(x, y)) {
+                    '*'
+                } else {
+                    self.board.get_cell(x, y).to_char()
+                };
+
+                write!(f, "{}", character)?;
             }
             writeln!(f)?;
         }
+
         Ok(())
     }
 }

@@ -1,8 +1,13 @@
 #[cfg(test)]
 mod tests {
+    use reversi_solver::Game;
+
     #[test]
     fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+        let game = Game::new();
+
+        println!("test");
+
+        println!("{}", game);
     }
 }
