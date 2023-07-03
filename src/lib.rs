@@ -14,22 +14,6 @@ pub struct Game {
     current_player: Player,
 }
 
-enum Direction {
-    Positive,
-    Negative,
-    None,
-}
-
-impl Direction {
-    fn apply(&self, i: usize, amount: isize) -> usize {
-        match self {
-            Direction::Positive => i.checked_add_signed(amount).unwrap(),
-            Direction::Negative => i.checked_add_signed(amount).unwrap(),
-            Direction::None => i,
-        }
-    }
-}
-
 impl Game {
     // TODO: this will be horrendously inefficient, however, i want to get test cases in place first,
     // so i'm doing rudimentary solutions for me to work out later
@@ -58,38 +42,38 @@ impl Game {
 
         let mut tiles_to_flip: Vec<usize> = Vec::new();
 
-        let directions: &[(Direction, Direction)] = &[
-            (Direction::None, Direction::Positive),
-            (Direction::Positive, Direction::Positive),
-            (Direction::Positive, Direction::None),
-            (Direction::Positive, Direction::Negative),
-            (Direction::None, Direction::Negative),
-            (Direction::Negative, Direction::Negative),
-            (Direction::Negative, Direction::None),
-            (Direction::Negative, Direction::Positive),
+        let directions: &[(isize, isize)] = &[
+            (0, 1),
+            (1, 1),
+            (1, 0),
+            (1, -1),
+            (0, -1),
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
         ];
 
         for (x_dir, y_dir) in directions {
             let mut x = x_init;
             let mut y = y_init;
 
-            x = x_dir.apply(x, 1);
-            y = y_dir.apply(y, 1);
+            x = x.wrapping_add_signed(*x_dir);
+            y = y.wrapping_add_signed(*y_dir);
 
             if !self.board.on_board(x, y) || self.board.get_cell(x, y) != opposing_tile {
                 continue;
             }
 
-            x = x_dir.apply(x, 1);
-            y = y_dir.apply(y, 1);
+            x = x.wrapping_add_signed(*x_dir);
+            y = y.wrapping_add_signed(*y_dir);
 
             if !self.board.on_board(x, y) {
                 continue;
             }
 
             while self.board.get_cell(x, y) == opposing_tile {
-                x = x_dir.apply(x, 1);
-                y = y_dir.apply(y, 1);
+                x = x.wrapping_add_signed(*x_dir);
+                y = y.wrapping_add_signed(*y_dir);
 
                 if !self.board.on_board(x, y) {
                     break;
@@ -102,8 +86,8 @@ impl Game {
 
             if self.board.get_cell(x, y) == Cell::Player(self.current_player) {
                 loop {
-                    x = x_dir.apply(x, -1);
-                    y = y_dir.apply(y, -1);
+                    x = x.checked_add_signed(-*x_dir).unwrap();
+                    y = y.checked_add_signed(-*y_dir).unwrap();
 
                     if x == x_init && y == y_init {
                         break;
