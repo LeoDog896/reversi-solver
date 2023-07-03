@@ -26,18 +26,21 @@ mod tests {
                 _ => panic!("Invalid test case {}", header[0]),
             };
 
-            let player = match header[1] {
-                "X" => Player::One,
-                "O" => Player::Two,
+            let players = match header[1] {
+                "X" => vec![Player::One],
+                "O" => vec![Player::Two],
+                "XO" => vec![Player::One, Player::Two],
                 _ => panic!("Invalid player {}", header[1]),
             };
             
-            let parsed_game = Game::from_string(&game[1..].join("\n"), player, true);
+            for player in players {
+                let parsed_game = Game::from_string(&game[1..].join("\n"), player, true);
 
-            if should_fail {
-                assert!(parsed_game.is_err(), "Game should have failed to parse: {game:?}");
-            } else {
-                parsed_game.unwrap();
+                if should_fail {
+                    assert!(parsed_game.is_err(), "Game should have failed to parse: {game:?}");
+                } else {
+                    parsed_game.unwrap();
+                }
             }
         }
     }
