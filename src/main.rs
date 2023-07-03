@@ -1,5 +1,6 @@
 use rand::Rng;
 use regex::Regex;
+use std::cmp::Ordering;
 use std::io;
 use std::io::stdout;
 use std::io::Write;
@@ -116,8 +117,8 @@ impl Board {
             Style::default().bold().paint("A B C D E F G H")
         );
 
-        let mut count = 0;
-        for i in self.board.iter() {
+        for (count, i) in self.board.iter().enumerate() {
+            let count = count as u8;
             if count % self.width == 0 {
                 if count != 0 {
                     let row_num: u8 = count / 8;
@@ -133,14 +134,11 @@ impl Board {
                 print!("{} ", Red.paint("●"));
             } else if i == &Square::CPU {
                 print!("{} ", Green.paint("●"));
+            } else if self.player_available_actions.contains(&count) {
+                print!("{} ", Style::default().bold().paint("*"));
             } else {
-                if self.player_available_actions.contains(&count) {
-                    print!("{} ", Style::default().bold().paint("*"));
-                } else {
-                    print!("- ");
-                }
+                print!("- ");
             }
-            count += 1;
         }
         print!("{}\n\n", Style::default().bold().paint("8"));
 
@@ -262,10 +260,8 @@ impl Board {
         for i in 0..3 {
             let new_pos: u8 = pos + 9 - i;
             let new_pos_usize: usize = new_pos.into();
-            if new_pos < self.board_size {
-                if self.board.get(new_pos_usize).unwrap() == &Square::Empty {
-                    self.perimeter.insert(new_pos);
-                }
+            if new_pos < self.board_size && self.board.get(new_pos_usize).unwrap() == &Square::Empty {
+                self.perimeter.insert(new_pos);
             }
         }
 
@@ -278,11 +274,11 @@ impl Board {
         self.cpu_available_actions.remove(&pos);
 
         // For each player Player and CPU
-        for player in vec![Square::Player, Square::CPU] {
+        for player in &[Square::Player, Square::CPU] {
             // For each tile in the perimeter
             for tile in self.get_perimeter() {
                 // Check if that tile is an available action
-                self.check_tile_actions(tile, player, debug);
+                self.check_tile_actions(tile, *player, debug);
             }
         }
 
@@ -291,12 +287,12 @@ impl Board {
             if debug {
                 println!("Player's turn");
             }
-            self.player_turn = false
+            self.player_turn = false;
         } else {
             if debug {
                 println!("CPU's turn");
             }
-            self.player_turn = true
+            self.player_turn = true;
         }
 
         if debug {
@@ -333,7 +329,7 @@ impl Board {
                 if tile != &val && tile != &Square::Empty {
                     // If the tile is not the same color as inserted, add to tiles vec
                     tiles.push(new_pos);
-                } else if tile == &val && tiles.len() != 0 {
+                } else if tile == &val && !tiles.is_empty() {
                     // If there is a tile the same color as the initial val with opposing tiles inbetween...
                     if debug {
                         println!("Added {} to actions for {:?}", new_pos, val);
@@ -415,7 +411,7 @@ impl Board {
         let cpu_actions = self.get_cpu_actions();
 
         // GAME IS ENDED
-        if cpu_actions.len() == 0 || player_actions.len() == 0 {
+        if cpu_actions.is_empty() || player_actions.is_empty() {
             let (player_score, cpu_score): (u8, u8) = self.get_score();
 
             if debug {
@@ -426,12 +422,10 @@ impl Board {
                 );
             }
 
-            if player_score > cpu_score {
-                return 1;
-            } else if cpu_score > player_score {
-                return 2;
-            } else {
-                return 3;
+            match player_score.cmp(&cpu_score) {
+                Ordering::Greater => 1,
+                Ordering::Less => 2,
+                Ordering::Equal => 3,
             }
         } else {
             0
@@ -490,17 +484,7 @@ fn get_new_pos(dir: u8, pos: u8, iter: u8, size: u8) -> Option<u8> {
 
         1 => {
             // Left
-            let position = match pos.checked_sub(iter) {
-                None => None,
-                Some(x) => {
-                    if Some(x).unwrap() % 8 == 7 {
-                        None
-                    } else {
-                        Some(x)
-                    }
-                }
-            };
-            position
+            pos.checked_sub(iter).filter(|&x| Some(x).unwrap() % 8 != 7)
         }
 
         2 => {
@@ -515,26 +499,12 @@ fn get_new_pos(dir: u8, pos: u8, iter: u8, size: u8) -> Option<u8> {
 
         3 => {
             // Up
-            let new_pos = match pos.checked_sub(iter * 8) {
-                None => None,
-                Some(x) => Some(x),
-            };
-            new_pos
+            pos.checked_sub(iter * 8)
         }
 
         4 => {
             // Up left: must check that doesn't % 8 = 7 and doesn't overflow
-            let new_pos = match pos.checked_sub(iter * 8 + iter) {
-                None => None,
-                Some(x) => {
-                    if Some(x).unwrap() % 8 != 7 {
-                        Some(x)
-                    } else {
-                        None
-                    }
-                }
-            };
-            new_pos
+            pos.checked_sub(iter * 8 + iter).filter(|&x| Some(x).unwrap() % 8 != 7)
         }
 
         5 => {
@@ -729,7 +699,7 @@ fn monte_carlo_tree_search(
             stdout().flush().unwrap();
         }
         if (i + 1) % 30 == 0 {
-            println!()
+            println!();
         }
 
         // Break out of function when timer is reached
@@ -914,10 +884,7 @@ fn main() {
             .expect("Failed to read line");
 
         match cpu_diff.trim().to_string().as_str() {
-            "1" => {
-                break cpu_diff.trim().to_string();
-            }
-            "2" => {
+            "1" | "2" => {
                 break cpu_diff.trim().to_string();
             }
             _ => {
@@ -965,36 +932,33 @@ fn main() {
                 .expect("Failed to read line");
 
             // Validate input string
-            match re.is_match(&input) {
-                true => {
-                    let input_u8: u8 = convert_2d(&input);
-                    board.ins(input_u8, Square::Player, debug);
-                }
-                false => {
-                    match input.as_str() {
-                        "help\n" => {
-                            print_help();
-                            continue;
-                        }
-                        "actions\n" => {
-                            print_actions(board.get_player_actions());
-                            continue;
-                        }
-                        "rules\n" => {
-                            print_rules();
-                            continue;
-                        }
-                        "debug\n" => {
-                            debug = toggle_debug(debug);
-                            continue;
-                        }
-                        "exit\n" => break,
-                        _ => {
-                            println!("ERROR: invalid input, enter 'help' for command information");
-                            continue;
-                        }
-                    };
-                }
+            if re.is_match(&input) {
+                let input_u8: u8 = convert_2d(&input);
+                board.ins(input_u8, Square::Player, debug);
+            } else {
+                match input.as_str() {
+                    "help\n" => {
+                        print_help();
+                        continue;
+                    }
+                    "actions\n" => {
+                        print_actions(board.get_player_actions());
+                        continue;
+                    }
+                    "rules\n" => {
+                        print_rules();
+                        continue;
+                    }
+                    "debug\n" => {
+                        debug = toggle_debug(debug);
+                        continue;
+                    }
+                    "exit\n" => break,
+                    _ => {
+                        println!("ERROR: invalid input, enter 'help' for command information");
+                        continue;
+                    }
+                };
             };
         } else {
             let best_play: u8 =
