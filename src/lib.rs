@@ -17,13 +17,13 @@ pub struct Game {
 impl Game {
     // TODO: this will be horrendously inefficient, however, i want to get test cases in place first,
     // so i'm doing rudimentary solutions for me to work out later
-    fn moves(&self) -> Vec<usize> {
+    pub fn moves(&self) -> Vec<usize> {
         let mut moves = Vec::new();
 
         // loop through all cells and check if they are valid moves
         for x in 0..WIDTH {
             for y in 0..HEIGHT {
-                if self.is_valid_move(x, y) {
+                if let Some(_) = self.is_valid_move(x, y) {
                     moves.push(at_pos(x, y));
                 }
             }
@@ -31,11 +31,16 @@ impl Game {
 
         moves
     }
-    fn is_valid_move(&self, x_init: usize, y_init: usize) -> bool {
+
+    pub fn swap_players(&mut self) {
+        self.current_player = self.current_player.opponent();
+    }
+
+    fn is_valid_move(&self, x_init: usize, y_init: usize) -> Option<Vec<usize>> {
         let cell = self.board.get_cell(x_init, y_init);
 
         if cell != Cell::Empty {
-            return false;
+            return None;
         }
 
         let opposing_tile = Cell::Player(self.current_player.opponent());
@@ -98,7 +103,11 @@ impl Game {
             }
         }
         
-        tiles_to_flip.len() > 0
+        if tiles_to_flip.is_empty() {
+            None
+        } else {
+            Some(tiles_to_flip)
+        }
     }
 
     pub fn new() -> Game {
@@ -116,17 +125,21 @@ impl Game {
         }
     }
 
-    pub fn play(&mut self, x: usize, y: usize) -> Result<()> {
-        let moves = self.moves();
+    pub fn play_idx(&mut self, index: usize) -> Result<()> {
+        let move_set = self.is_valid_move(index % WIDTH, index / WIDTH).unwrap();
 
-        if !moves.contains(&at_pos(x, y)) {
-            return Err(anyhow!("Invalid move"));
+        self.board.set_cell_idx(index, Cell::Player(self.current_player));
+
+        for idx in move_set {
+            self.board.set_cell_idx(idx, Cell::Player(self.current_player));
         }
-
-        self.board.set_cell(x, y, Cell::Player(self.current_player));
 
         self.current_player = self.current_player.opponent();
         Ok(())
+    }
+
+    pub fn play(&mut self, x: usize, y: usize) -> Result<()> {
+        self.play_idx(at_pos(x, y))
     }
     
     pub fn from_string(string: &str, player: Player, validate: bool) -> Result<Self> {

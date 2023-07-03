@@ -62,6 +62,14 @@ impl Board {
         self.cells[at_pos(x, y)] = cell;
     }
 
+    pub fn set_cell_idx(&mut self, idx: usize, cell: Cell) {
+        self.cells[idx] = cell;
+    }
+
+    pub fn get_cell_idx(&self, idx: usize) -> Cell {
+        self.cells[idx]
+    }
+
     pub fn on_board(&self, x: usize, y: usize) -> bool {
         x < WIDTH && y < HEIGHT
     }
