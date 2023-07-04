@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use reversi_solver::{Game, solve::{negamax, solve}, board::{Player, Cell, WIDTH}};
+use reversi_solver::{Game, solve::solve, board::{Player, Cell, WIDTH}};
 use anyhow::Result;
 
 /// Solve and generate reversi puzzles
@@ -32,7 +32,7 @@ fn main() -> Result<()> {
         Commands::Random { slow, backtrack } => {
             let mut game = Game::new();
 
-            let mut decided_moves: Vec<usize> = Vec::new();
+            let mut decided_moves: Vec<Option<usize>> = Vec::new();
 
             let mut moves = game.moves();
 
@@ -48,23 +48,28 @@ fn main() -> Result<()> {
 
                 game.play_idx(chosen_move).unwrap();
 
-                decided_moves.push(chosen_move);
+                decided_moves.push(Some(chosen_move));
 
                 moves = game.moves();
                 if moves.len() == 0 {
                     game.swap_players();
                     moves = game.moves();
+                    decided_moves.push(None);
                 }
             }
 
             let mut final_game = Game::new();
             
             for decided_move in &decided_moves[0..decided_moves.len() - backtrack] {
-                final_game.play_idx(*decided_move).unwrap();
+                match decided_move {
+                    Some(idx) => final_game.play_idx(*idx).unwrap(),
+                    None => final_game.swap_players()
+                }
             }
             
 
             println!("{}", final_game);
+            println!("{:?}", final_game);
         },
         Commands::Solve => {
             let game = Game::from_string("--OOOOOO\n\
@@ -78,7 +83,7 @@ fn main() -> Result<()> {
 
             let scores = &solve(&game);
 
-            for (i, cell) in game.into_iter().enumerate() {
+            for (i, cell) in game.iter().enumerate() {
                 if let Some(score) = scores.into_iter().filter(|(_, idx)| *idx == i).map(|(_, score)| score).next() {
                     print!("{:<3}", score);
                 } else {

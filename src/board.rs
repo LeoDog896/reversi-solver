@@ -75,14 +75,9 @@ impl Board {
     pub fn on_board(&self, x: usize, y: usize) -> bool {
         x < WIDTH && y < HEIGHT
     }
-}
 
-impl IntoIterator for Board {
-    type Item = Cell;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.cells.to_vec().into_iter()
+    pub fn iter(&self) -> std::slice::Iter<Cell> {
+        self.cells.iter()
     }
 }
 

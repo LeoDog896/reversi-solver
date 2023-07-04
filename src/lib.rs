@@ -7,7 +7,7 @@ use board::{Board, Cell, Player, at_pos, HEIGHT, WIDTH};
 use anyhow::{Result, anyhow};
 
 /// A game struct representing the current Reversi game state.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Game {
     board: board::Board,
     current_player: Player,
@@ -229,14 +229,35 @@ impl Game {
 
         Ok(game)
     }
-}
 
-impl IntoIterator for Game {
-    type Item = Cell;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
+    pub fn from_compressed_string(string: &str) {
+        let mut game = Self::new();
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.board.into_iter()
+        let (prefix, game_str) = string.split_at(2);
+
+        game.current_player = match prefix {
+            "X:" => Player::One,
+            "O:" => Player::Two,
+            _ => panic!("Invalid prefix"),
+        };
+
+        for (idx, character) in game_str.chars().enumerate() {
+            let x = idx % WIDTH;
+            let y = idx / WIDTH;
+
+            let cell = match character {
+                'X' => Cell::Player(Player::One),
+                'O' => Cell::Player(Player::Two),
+                '-' => Cell::Empty,
+                _ => panic!("Invalid character: {}", character),
+            };
+
+            game.board.set_cell(x, y, cell);
+        }
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<Cell> {
+        self.board.iter()
     }
 }
 
@@ -257,6 +278,18 @@ impl fmt::Display for Game {
                 write!(f, "{}", character)?;
             }
             writeln!(f)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Debug for Game {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:", Cell::Player(self.current_player).to_char())?;
+
+        for cell in self.board.iter() {
+            write!(f, "{}", cell.to_char())?;
         }
 
         Ok(())
