@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
-use reversi_solver::Game;
+use reversi_solver::{Game, solve::negamax};
+use anyhow::Result;
 
 /// Solve and generate reversi puzzles
 #[derive(Parser, Debug)]
@@ -21,7 +22,7 @@ enum Commands {
 }
 
 
-fn main() {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     match args.command {
@@ -53,7 +54,9 @@ fn main() {
             println!("{}", game);
         },
         Commands::Solve => {
-            
+            println!("{}", negamax(&Game::new())?);
         }
-    }
+    };
+
+    Ok(())
 }
