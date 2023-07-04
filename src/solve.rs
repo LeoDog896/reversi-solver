@@ -10,7 +10,6 @@ pub fn negamax(game: &Game) -> Result<isize> {
 
     for possible_move in moves {
         if game.is_winning_move_idx(*possible_move, game.current_player)? {
-            // return (Position::WIDTH*Position::HEIGHT+1 - P.nbMoves())/2;
             return Ok((SIZE as isize + 1 - game.moves().len() as isize) / 2);
         }
     }
