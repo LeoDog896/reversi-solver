@@ -1,4 +1,5 @@
 pub mod board;
+pub mod solve;
 
 use std::fmt;
 
@@ -34,6 +35,43 @@ impl Game {
 
     pub fn swap_players(&mut self) {
         self.current_player = self.current_player.opponent();
+    }
+
+    fn winning_player(&self) -> Option<Player> {
+        let mut player_one_count = 0;
+        let mut player_two_count = 0;
+
+        for x in 0..WIDTH {
+            for y in 0..HEIGHT {
+                match self.board.get_cell(x, y) {
+                    Cell::Player(Player::One) => player_one_count += 1,
+                    Cell::Player(Player::Two) => player_two_count += 1,
+                    _ => (),
+                }
+            }
+        }
+
+        if player_one_count > player_two_count {
+            Some(Player::One)
+        } else if player_two_count > player_one_count {
+            Some(Player::Two)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_winning_move(&self, x: usize, y: usize, player: Player) -> Result<bool> {
+        let mut new_game = self.clone();
+
+        new_game.play(x, y)?;
+
+        Ok(new_game.winning_player() == Some(player) && new_game.moves().is_empty())
+    }
+
+    pub fn is_winning_move_idx(&self, index: usize, player: Player) -> Result<bool> {
+        let (x, y) = (index % WIDTH, index / WIDTH);
+
+        self.is_winning_move(x, y, player)
     }
 
     fn is_valid_move(&self, x_init: usize, y_init: usize) -> Option<Vec<usize>> {
@@ -126,7 +164,7 @@ impl Game {
     }
 
     pub fn play_idx(&mut self, index: usize) -> Result<()> {
-        let move_set = self.is_valid_move(index % WIDTH, index / WIDTH).unwrap();
+        let move_set = self.is_valid_move(index % WIDTH, index / WIDTH).ok_or(anyhow!("Invalid move"))?;
 
         self.board.set_cell_idx(index, Cell::Player(self.current_player));
 

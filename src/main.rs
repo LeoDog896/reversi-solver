@@ -15,7 +15,9 @@ enum Commands {
     Random {
         #[arg(short, long, default_value_t = false)]
         step: bool,
-    }
+    },
+    /// Solve a game
+    Solve
 }
 
 
@@ -49,6 +51,9 @@ fn main() {
             
 
             println!("{}", game);
+        },
+        Commands::Solve => {
+            
         }
     }
 }
