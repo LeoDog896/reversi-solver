@@ -54,6 +54,10 @@ impl Board {
         }
     }
 
+    pub fn total_moves(&self) -> usize {
+        self.cells.iter().filter(|cell| **cell != Cell::Empty).count()
+    }
+
     pub fn get_cell(&self, x: usize, y: usize) -> Cell {
         self.cells[at_pos(x, y)]
     }

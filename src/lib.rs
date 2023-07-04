@@ -179,6 +179,10 @@ impl Game {
     pub fn play(&mut self, x: usize, y: usize) -> Result<()> {
         self.play_idx(at_pos(x, y))
     }
+
+    pub fn total_moves(&self) -> usize {
+        self.board.total_moves()
+    }
     
     pub fn from_string(string: &str, player: Player, validate: bool) -> Result<Self> {
         let mut game = Self::new();
