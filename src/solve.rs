@@ -30,3 +30,14 @@ pub fn negamax(game: &Game) -> Result<isize> {
 
     Ok(best_score)
 }
+
+/// Returns the scores for each move
+pub fn solve(game: &Game) -> Vec<(isize, usize)> {
+    // turn each possible move into a score and get the top ones
+    game.moves().into_iter().map(|possible_move| {
+        let mut new_game = game.clone();
+        new_game.play_idx(possible_move).unwrap();
+        let score = negamax(&new_game).unwrap();
+        (score, possible_move)
+    }).collect()
+}

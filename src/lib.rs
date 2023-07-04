@@ -6,9 +6,7 @@ use std::fmt;
 use board::{Board, Cell, Player, at_pos, HEIGHT, WIDTH};
 use anyhow::{Result, anyhow};
 
-/*
-    A game struct representing the current Reversi game state.
-*/
+/// A game struct representing the current Reversi game state.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Game {
     board: board::Board,
@@ -230,6 +228,15 @@ impl Game {
         }
 
         Ok(game)
+    }
+}
+
+impl IntoIterator for Game {
+    type Item = Cell;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.board.into_iter()
     }
 }
 

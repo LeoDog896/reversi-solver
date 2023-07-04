@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use reversi_solver::{Game, solve::negamax, board::Player};
+use reversi_solver::{Game, solve::{negamax, solve}, board::{Player, Cell, WIDTH}};
 use anyhow::Result;
 
 /// Solve and generate reversi puzzles
@@ -75,7 +75,24 @@ fn main() -> Result<()> {
             XOXOXOOO\n\
             XOOXXOOO\n\
             *OXXXXO*", Player::One, true)?;
-            println!("{}", negamax(&game)?);
+
+            let scores = &solve(&game);
+
+            for (i, cell) in game.into_iter().enumerate() {
+                if let Some(score) = scores.into_iter().filter(|(_, idx)| *idx == i).map(|(_, score)| score).next() {
+                    print!("{:<3}", score);
+                } else {
+                    match cell {
+                        Cell::Empty => print!("-  "),
+                        Cell::Player(Player::One) => print!("X  "),
+                        Cell::Player(Player::Two) => print!("Y  "),
+                    }
+                }
+
+                if i % WIDTH == WIDTH - 1 {
+                    println!();
+                }
+            }
         }
     };
 

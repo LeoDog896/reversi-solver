@@ -35,9 +35,7 @@ impl Cell {
     }
 }
 
-/*
-    Represents the internal state of the game board.
-*/
+/// Represents the internal state of the game board.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Board {
     cells: [Cell; SIZE],
@@ -76,6 +74,15 @@ impl Board {
 
     pub fn on_board(&self, x: usize, y: usize) -> bool {
         x < WIDTH && y < HEIGHT
+    }
+}
+
+impl IntoIterator for Board {
+    type Item = Cell;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.cells.to_vec().into_iter()
     }
 }
 
