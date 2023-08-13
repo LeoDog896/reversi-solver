@@ -1,4 +1,4 @@
-# reversi-solver
+# reversi-solver (ARCHIVED: use https://github.com/LeoDog896/game-solver instead - reversi in /examples)
 
 weak/strong? solver for reversi (TODO)
 
